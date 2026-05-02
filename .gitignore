@@ -1,0 +1,4 @@
+
+# Ignore Rust target directories
+target/
+**/target/
