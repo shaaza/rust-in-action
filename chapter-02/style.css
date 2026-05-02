@@ -1,0 +1,223 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --color-todo: #3b82f6;
+  --color-done: #10b981;
+  --color-text: #1f2937;
+  --color-border: #e5e7eb;
+  --color-bg-light: #f9fafb;
+  --color-bg-done: #d1fae5;
+  --opacity-done: 0.5;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: #ffffff;
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Header */
+header {
+  text-align: center;
+  margin-bottom: 3rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 2rem;
+}
+
+header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+}
+
+.progress-summary {
+  font-size: 1.1rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Concept Map Section */
+.map-section {
+  margin-bottom: 3rem;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.map-section h2 {
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+  color: var(--color-text);
+}
+
+#concept-map {
+  width: 100%;
+  height: 600px;
+  border: 1px solid var(--color-border);
+  background: white;
+  border-radius: 4px;
+}
+
+/* SVG Node Styling */
+svg circle {
+  cursor: pointer;
+  transition: opacity 0.3s ease, r 0.3s ease;
+}
+
+svg circle.todo {
+  fill: var(--color-todo);
+  opacity: 1;
+}
+
+svg circle.done {
+  fill: var(--color-done);
+  opacity: var(--opacity-done);
+}
+
+svg circle:hover {
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.15));
+}
+
+svg text.node-label {
+  font-size: 13px;
+  text-anchor: middle;
+  pointer-events: none;
+  font-weight: 500;
+  fill: var(--color-text);
+}
+
+svg text.node-label.done {
+  opacity: var(--opacity-done);
+}
+
+svg line.edge {
+  stroke: #d1d5db;
+  stroke-width: 2;
+  fill: none;
+  marker-end: url(#arrowhead);
+}
+
+/* Arrow marker */
+svg defs marker {
+  overflow: visible;
+}
+
+svg marker circle {
+  fill: #d1d5db;
+}
+
+/* Checklist Section */
+.checklist-section {
+  margin-bottom: 2rem;
+}
+
+.checklist-section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--color-text);
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.exercises-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Exercise Card */
+.exercise-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.exercise-card:hover {
+  border-color: var(--color-todo);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.exercise-card.done {
+  background: var(--color-bg-done);
+  border-color: var(--color-done);
+  opacity: var(--opacity-done);
+}
+
+.exercise-card input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: var(--color-todo);
+}
+
+.exercise-card.done input[type="checkbox"] {
+  accent-color: var(--color-done);
+}
+
+.exercise-content {
+  flex: 1;
+}
+
+.exercise-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text);
+  margin-bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.exercise-card.done .exercise-title {
+  text-decoration: line-through;
+  color: #6b7280;
+}
+
+.exercise-spec {
+  font-size: 0.95rem;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.exercise-card.done .exercise-spec {
+  color: #9ca3af;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .container {
+    padding: 1rem;
+  }
+
+  header h1 {
+    font-size: 1.8rem;
+  }
+
+  #concept-map {
+    height: 400px;
+  }
+
+  .checklist-container {
+    grid-template-columns: 1fr;
+  }
+}

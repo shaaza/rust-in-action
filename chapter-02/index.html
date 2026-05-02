@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chapter 2: Language Foundations — Interactive Exercises</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Chapter 2: Language Foundations</h1>
+      <p class="progress-summary"><span id="progress-count">0</span> / <span id="progress-total">22</span> complete</p>
+    </header>
+
+    <!-- Concept Map -->
+    <section class="map-section">
+      <h2>Concept Map</h2>
+      <svg id="concept-map" width="100%" height="600" viewBox="0 0 1200 600">
+        <!-- Edges (drawn first, below nodes) -->
+        <g id="map-edges" class="edges"></g>
+        <!-- Nodes (drawn on top) -->
+        <g id="map-nodes" class="nodes"></g>
+      </svg>
+    </section>
+
+    <!-- Checklist -->
+    <section class="checklist-section">
+      <h2>Exercises</h2>
+      <div id="exercises-list" class="exercises-list"></div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
