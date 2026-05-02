@@ -11,5 +11,16 @@ fn print_add() {
 }
 
 fn main() {
-    print_add()
+    let arg1 = std::env::args().nth(1);
+    if arg1.is_none() {
+        println!("No argument provided.");
+        return;
+    }
+
+    let arg = arg1.unwrap();
+
+    match arg.as_str() {
+        "add" => print_add(),
+        _ => println!("Unknown argument: {}", arg),
+    }
 }
