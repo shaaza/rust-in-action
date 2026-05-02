@@ -10,6 +10,14 @@ fn print_add() {
     println!("Sum: {}", sum);
 }
 
+fn print_floating_point() {
+    let a = 0.32;
+    let b = 0.64f32;
+    let c: f32 = 0.1;
+    let sum = a + b + c;
+    println!("Float sum: {}", sum)
+}
+
 fn main() {
     let arg1 = std::env::args().nth(1);
     if arg1.is_none() {
@@ -21,6 +29,7 @@ fn main() {
 
     match arg.as_str() {
         "add" => print_add(),
+        "float" => print_floating_point(),
         _ => println!("Unknown argument: {}", arg),
     }
 }
