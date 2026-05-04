@@ -18,6 +18,14 @@ fn print_floating_point() {
     println!("Float sum: {}", sum)
 }
 
+fn compare_nums() {
+    let a: i32 = 10;
+    let b: u16 = 3;
+    if a > b.into() { // try_into() for safer type case checking
+        println!("a > b, i.e. {} > {}", a, b)
+    }
+}
+
 fn main() {
     let arg1 = std::env::args().nth(1);
     if arg1.is_none() {
@@ -30,6 +38,7 @@ fn main() {
     match arg.as_str() {
         "add" => print_add(),
         "float" => print_floating_point(),
+        "compare" => compare_nums(),
         _ => println!("Unknown argument: {}", arg),
     }
 }
