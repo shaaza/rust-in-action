@@ -72,6 +72,22 @@ fn loops() {
     println!(" printed 10 dots using while")
 }
 
+fn enumerated_loop() {
+    let search_term = "picture";
+    let quote = "\
+    Every face, every shop, bedroom window, public-house, and
+    dark square is a picture feverishly turned--in search of what?
+    It is the same with books. What do we seek through millions of pages?";
+
+    for (i, line) in quote.lines().enumerate() {
+        if line.contains(search_term) {
+            let line_num = i + 1;
+            println!("Line num: {}", line_num);
+        }
+    }
+
+}
+
 // match with range matching
 fn match_range() {
     let age = 31;
@@ -139,6 +155,7 @@ fn main() {
         "float" => print_floating_point(),
         "compare" => compare_nums(),
         "loops" => loops(),
+        "enumerated-loop" => enumerated_loop(),
         "match" => match_range(),
         "generic-add" => print_generic_add(),
         _ => println!("Unknown argument: {}", arg),
