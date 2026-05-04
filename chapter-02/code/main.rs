@@ -125,6 +125,11 @@ fn print_generic_add() {
 // Some other types may be encountered in your travels. Here’s a short list:a   char—A single character encoded as 4 bytes. The internal representation of  char is equivalent to UCS-4/UTF-32. This differs from &str and String,  which encodes single characters as UTF-8. Conversion does impose a pen-  alty, but it means that char values are of fixed-width and are, therefore, eas-  ier for the compiler to reason about. Characters encoded as UTF-8 can span  1 to 4 bytes.   [u8]—A slice of raw bytes, usually found when dealing with streams of  binary data.   Vec<u8>—A vector of raw bytes, usually created when consuming [u8] data.  String is to Vec<u8> as str is to [u8].   std::ffi::OSString—A platform-native string. It’s behavior is close to String  but without a guarantee that it’s encoded as UTF-8 and that it won’t contain  the zero byte (0x00).   std::path::Path—A string-like type that is dedicated to handling filesys-  tem paths.  
 
 // Arrays, slices and vectors
+// Arrays are fixed size, statically sized -- the size is a type.
+// Slices are dynamically sized and can be views into an array
+// Vector seems the most common higher level construct to use
+
+
 
 
 
