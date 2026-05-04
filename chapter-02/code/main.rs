@@ -73,7 +73,19 @@ fn loops() {
 }
 
 // match with range matching
+fn match_range() {
+    let age = 31;
+    print!("Age is {}, so: ", age);
+    match age {
+        0 => println!("Not born."),
+        1 ..= 3 => println!("Toddler"),
+        4 ..= 12 => println!("Child"),
+        13 ..= 19 => println!("Teens"),
+        30 | 40 => println!("Midlife crisis"),
+        _ => println!("Adult"),
+    }
 
+}
 // reference: add a number to a variable with its reference assigned to it
 // Lifetime definitions
 
@@ -91,6 +103,7 @@ fn main() {
         "float" => print_floating_point(),
         "compare" => compare_nums(),
         "loops" => loops(),
+        "match" => match_range(),
         _ => println!("Unknown argument: {}", arg),
     }
 }
