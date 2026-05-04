@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::{BufReader, BufRead};
+
 fn add(x: i32, y: i32) -> i32 {
     x + y
 }
@@ -129,10 +132,17 @@ fn print_generic_add() {
 // Slices are dynamically sized and can be views into an array
 // Vector seems the most common higher level construct to use
 
-
-
-
-
+// Reading files
+fn read_and_print_file() {
+    let filename = "file.txt";
+    let file = File::open(filename).expect("Failed to open file");
+    let reader = BufReader::new(file);
+    // Create new reader
+    for (i, line_) in reader.lines().enumerate() {
+        let line = line_.unwrap();
+        println!("Line {}: {}", i, line);
+    }
+}
 
 
 // Grep lite (as branch)
@@ -163,6 +173,7 @@ fn main() {
         "enumerated-loop" => enumerated_loop(),
         "match" => match_range(),
         "generic-add" => print_generic_add(),
+        "file" => read_and_print_file(),
         _ => println!("Unknown argument: {}", arg),
     }
 }
