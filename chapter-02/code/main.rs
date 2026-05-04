@@ -86,8 +86,40 @@ fn match_range() {
     }
 
 }
-// reference: add a number to a variable with its reference assigned to it
-// Lifetime definitions
+
+// Skipped: lifetime annotations
+// Skipped: references
+
+// Generic functions!
+fn add_generic<T: std::ops::Add<Output = T>>(a: T, b: T) -> T {
+    a + b
+}
+
+fn print_generic_add() {
+    let t: i32 = 10;
+    let s: i32 = 20;
+    println!("i32 sum: {}", add_generic(t, s));
+    let a: i64 = 10;
+    let b: i64 = 50;
+    println!("i64 sum: {}", add_generic(a, b));
+}
+// Different types of string
+// Arrays, slices and vectors
+
+
+
+
+
+// Grep lite (as branch)
+// Adding 3p code
+// Using regexp
+// Generate 3P docs
+// rust-up
+// CLI args
+// Reading from files
+// Reading input via stdin
+
+
 
 fn main() {
     let arg1 = std::env::args().nth(1);
@@ -104,6 +136,7 @@ fn main() {
         "compare" => compare_nums(),
         "loops" => loops(),
         "match" => match_range(),
+        "generic-add" => print_generic_add(),
         _ => println!("Unknown argument: {}", arg),
     }
 }
