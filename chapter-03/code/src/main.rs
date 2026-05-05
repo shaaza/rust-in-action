@@ -4,6 +4,9 @@ use stub_file_api::prototype_file_api;
 mod file_api;
 use file_api::struct_file_api;
 
+mod event_log;
+use event_log::parse_event_log;
+
 
 fn main() {
     let arg1 = std::env::args().nth(1);
@@ -16,6 +19,7 @@ fn main() {
     match arg.as_str() {
         "prototype_file_api" => prototype_file_api(),
         "file_api_struct" => struct_file_api(),
+        "parse_event_log" => parse_event_log(),
         _ => println!("unknown arg"),
     }
 }

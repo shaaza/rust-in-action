@@ -2,9 +2,16 @@
 use rand::RngExt;
 
 #[derive(Debug)]
+enum FileState {
+    Open,
+    Closed,
+}
+
+#[derive(Debug)]
 struct File {
     name: String,
     data: Vec<u8>,
+    state: FileState,
 }
 
 fn one_in(denominator: u32) -> bool {
@@ -20,6 +27,7 @@ impl File {
         File {
             name: String::from(name),
             data: Vec::new(),
+            state: FileState::Closed,
         }
     }
 
@@ -39,16 +47,18 @@ impl File {
     }
 }
 
-fn open(f: File) -> Result<File, String> {
+fn open(mut f: File) -> Result<File, String> {
     if one_in(5) {
         let err = String::from("file open failure random");
         return Err(err);
     }
 
+    f.state = FileState::Open;
     Ok(f)
 }
 
-fn close(f: File) -> bool {
+fn close(mut f: File) -> bool {
+    f.state = FileState::Closed;
     true
 }
 
