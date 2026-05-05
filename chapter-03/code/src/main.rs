@@ -19,4 +19,3 @@ fn main() {
         _ => println!("unknown arg"),
     }
 }
-
