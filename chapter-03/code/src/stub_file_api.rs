@@ -1,3 +1,5 @@
+//! Prototype file API that uses a string alias before introducing richer types.
+
 #![allow(unused_variables)]
 type File = String;
 

@@ -1,9 +1,12 @@
+//! Trait-based file API example that moves read behavior behind a trait.
+
 trait Read {
     fn read(&self, save_to: &mut Vec<u8>) -> Result<usize, String>;
 }
 
+/// Represents an in-memory file whose bytes can be read through the `Read` trait.
 #[derive(Debug)]
-struct File {
+pub struct File {
     name: String,
     data: Vec<u8>,
 }

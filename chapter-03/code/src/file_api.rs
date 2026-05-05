@@ -1,3 +1,5 @@
+//! Struct-based file API example that tracks file data and state.
+
 #![allow(unused_variables)]
 use rand::RngExt;
 use std::fmt;
@@ -9,6 +11,7 @@ enum FileState {
     Closed,
 }
 
+/// Represents an in-memory file with a name, byte contents, and open/closed state.
 #[derive(Debug)]
 struct File {
     name: String,

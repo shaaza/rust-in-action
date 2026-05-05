@@ -1,0 +1,1 @@
+searchState.loadedDescShard("trait_file_api", 0, "Trait-based file API example that moves read behavior …\nRepresents an in-memory file whose bytes can be read …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

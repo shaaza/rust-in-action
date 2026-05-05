@@ -1,3 +1,5 @@
+//! Command-line entry point for running the chapter 3 examples.
+
 mod stub_file_api;
 use stub_file_api::prototype_file_api;
 

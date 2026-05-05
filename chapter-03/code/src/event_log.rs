@@ -1,3 +1,5 @@
+//! Event log parsing example using simple enums and tuple aliases.
+
 #[derive(Debug)]
 enum EventType {
     Update,
