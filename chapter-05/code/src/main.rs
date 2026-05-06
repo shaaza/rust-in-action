@@ -7,6 +7,11 @@ struct CPU {
 
 type Operation = (u8, u8, u8, u8);
 
+#[derive(Debug, PartialEq, Eq)]
+enum Instruction {
+    Add { x: usize, y: usize },
+}
+
 fn decode_opcode(opcode: u16) -> Operation {
     let c = ((opcode & 0xF000) >> 12) as u8;
     let x = ((opcode & 0x0F00) >> 8) as u8;
@@ -14,6 +19,16 @@ fn decode_opcode(opcode: u16) -> Operation {
     let d = (opcode & 0x000F) as u8;
 
     (c, x, y, d)
+}
+
+fn decode_instruction(operation: Operation) -> Instruction {
+    match operation {
+        (0x8, x, y, 0x4) => Instruction::Add {
+            x: x as usize,
+            y: y as usize,
+        },
+        _ => todo!(),
+    }
 }
 
 impl CPU {
@@ -24,16 +39,16 @@ impl CPU {
     fn run(&mut self) {
         let opcode = self.read_opcode();
         let operation = decode_opcode(opcode);
+        let instruction = decode_instruction(operation);
 
-        self.dispatch_operation(operation);
+        self.dispatch_instruction(instruction);
     }
 
-    fn dispatch_operation(&mut self, operation: Operation) {
-        match operation {
-            (0x8, 0x0, 0x1, 0x4) => {
-                self.registers[0] = self.registers[0].wrapping_add(self.registers[1]);
+    fn dispatch_instruction(&mut self, instruction: Instruction) {
+        match instruction {
+            Instruction::Add { x, y } => {
+                self.registers[x] = self.registers[x].wrapping_add(self.registers[y]);
             }
-            _ => todo!(),
         }
     }
 }
@@ -75,6 +90,14 @@ mod tests {
     fn decode_opcode_preserves_each_nibble_position() {
         // Each hex digit is decoded from its own position in the u16 opcode.
         assert_eq!(decode_opcode(0xABCD), (0xA, 0xB, 0xC, 0xD));
+    }
+
+    #[test]
+    fn decode_operation_into_add_instruction() {
+        assert_eq!(
+            decode_instruction((0x8, 0x0, 0x1, 0x4)),
+            Instruction::Add { x: 0, y: 1 }
+        );
     }
 
     #[test]
