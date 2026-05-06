@@ -4,6 +4,8 @@ struct CPU {
     registers: [u8; 2],
     memory: [u8; 0x1000],
     program_counter: usize,
+    stack: [u16; 16],
+    stack_pointer: usize,
 }
 
 type Operation = (u8, u8, u8, u8);
@@ -11,6 +13,8 @@ type Operation = (u8, u8, u8, u8);
 #[derive(Debug, PartialEq, Eq)]
 enum Instruction {
     Add { x: usize, y: usize },
+    Call { address: usize },
+    Return,
 }
 
 fn decode_opcode(opcode: u16) -> Operation {
@@ -24,6 +28,10 @@ fn decode_opcode(opcode: u16) -> Operation {
 
 fn decode_instruction(operation: Operation) -> Instruction {
     match operation {
+        (0x0, 0x0, 0xE, 0xE) => Instruction::Return,
+        (0x2, x, y, d) => Instruction::Call {
+            address: ((x as usize) << 8) | ((y as usize) << 4) | d as usize,
+        },
         (0x8, x, y, 0x4) => Instruction::Add {
             x: x as usize,
             y: y as usize,
@@ -33,6 +41,14 @@ fn decode_instruction(operation: Operation) -> Instruction {
 }
 
 impl CPU {
+    fn load(&mut self, opcodes: &[u16], start: usize) {
+        for (i, opcode) in opcodes.iter().enumerate() {
+            let memory_index = start + (i * 2);
+            self.memory[memory_index] = (opcode >> 8) as u8;
+            self.memory[memory_index + 1] = (opcode & 0x00FF) as u8;
+        }
+    }
+
     fn read_opcode(&self) -> u16 {
         let p = self.program_counter;
         let op_byte1 = self.memory[p] as u16;
@@ -65,9 +81,22 @@ impl CPU {
             Instruction::Add { x, y } => {
                 self.registers[x] = self.registers[x].wrapping_add(self.registers[y]);
             }
+            Instruction::Call { address } => self.call(address),
+            Instruction::Return => self.ret(),
         }
 
         true
+    }
+
+    fn call(&mut self, address: usize) {
+        self.stack[self.stack_pointer] = self.program_counter as u16;
+        self.stack_pointer += 1;
+        self.program_counter = address - 2;
+    }
+
+    fn ret(&mut self) {
+        self.stack_pointer -= 1;
+        self.program_counter = self.stack[self.stack_pointer] as usize;
     }
 }
 
@@ -76,6 +105,8 @@ fn main() {
         registers: [0; 2],
         memory: [0; 0x1000],
         program_counter: 0,
+        stack: [0; 16],
+        stack_pointer: 0,
     };
 
     cpu.registers[0] = 5;
@@ -99,10 +130,11 @@ mod tests {
             registers: [x, y],
             memory: [0; 0x1000],
             program_counter: 0,
+            stack: [0; 16],
+            stack_pointer: 0,
         };
 
-        cpu.memory[0] = 0x80;
-        cpu.memory[1] = 0x14;
+        cpu.load(&[0x8014], 0);
 
         cpu
     }
@@ -126,6 +158,21 @@ mod tests {
             decode_instruction((0x8, 0x0, 0x1, 0x4)),
             Instruction::Add { x: 0, y: 1 }
         );
+    }
+
+    #[test]
+    fn decode_operation_into_call_instruction() {
+        // 0x2006 calls the function loaded at memory address 0x006, decimal 6.
+        assert_eq!(
+            decode_instruction((0x2, 0x0, 0x0, 0x6)),
+            Instruction::Call { address: 0x006 }
+        );
+    }
+
+    #[test]
+    fn decode_operation_into_return_instruction() {
+        // 0x00EE returns from the current function.
+        assert_eq!(decode_instruction((0x0, 0x0, 0xE, 0xE)), Instruction::Return);
     }
 
     #[test]
@@ -172,9 +219,8 @@ mod tests {
     fn executes_several_instructions_in_sequence() {
         let mut cpu = cpu_for_add(5, 10);
         // The CPU reads instructions as two-byte opcodes.
-        // These two bytes create a second 0x8014 ADD instruction at memory[2..4].
-        cpu.memory[2] = 0x80;
-        cpu.memory[3] = 0x14;
+        // This creates a second 0x8014 ADD instruction at memory[2..4].
+        cpu.load(&[0x8014], 2);
 
         cpu.run();
 
@@ -189,5 +235,36 @@ mod tests {
         let cpu = cpu_for_add(5, 10);
 
         assert_eq!(cpu.read_opcode(), 0x8014);
+    }
+
+    #[test]
+    fn calls_function_twice_and_returns_to_calling_location() {
+        let mut cpu = CPU {
+            registers: [
+                5,  // decimal 5
+                10, // decimal 10
+            ],
+            memory: [0; 0x1000],
+            program_counter: 0,
+            stack: [0; 16],
+            stack_pointer: 0,
+        };
+
+        // Main program:
+        // 0x2006 calls the function at 0x006, decimal 6.
+        // 0x2006 calls the function at 0x006, decimal 6.
+        cpu.load(&[0x2006, 0x2006], 0);
+
+        // add_twice:
+        // 0x8014 adds register 1, decimal 10, into register 0.
+        // 0x8014 adds register 1, decimal 10, into register 0.
+        // 0x00EE returns to the previous CALL instruction.
+        cpu.load(&[0x8014, 0x8014, 0x00EE], 0x006);
+
+        cpu.run();
+
+        // 5 + (10 * 2) + (10 * 2) = 45
+        assert_eq!(cpu.registers, [45, 10]);
+        assert_eq!(cpu.stack_pointer, 0);
     }
 }
