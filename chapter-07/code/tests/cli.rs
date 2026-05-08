@@ -61,6 +61,30 @@ fn insert_accepts_key_and_value() {
         .stdout(predicate::str::contains("insert my-key=my-value into"));
 }
 
+/// Inserted and deleted values are visible to later CLI invocations.
+#[test]
+fn insert_and_delete_persist_for_get() {
+    let file = NamedTempFile::new().unwrap();
+
+    actionkv("actionkv filepath insert my-key my-value", &file)
+        .assert()
+        .success();
+
+    actionkv("actionkv filepath get my-key", &file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("my-key=my-value"));
+
+    actionkv("actionkv filepath delete my-key", &file)
+        .assert()
+        .success();
+
+    actionkv("actionkv filepath get my-key", &file)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(r#"my-key not found in"#));
+}
+
 /// Rejects insert without a value.
 #[test]
 fn insert_requires_value() {

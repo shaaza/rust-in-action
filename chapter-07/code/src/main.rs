@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = KVStore::open(filepath)?;
 
     match &command {
-        Command::Get { key } => match store.get(key) {
+        Command::Get { key } => match store.get(key)? {
             Some(value) => println!("{key}={value}"),
             None => println!("{key} not found in {:?}", store.filepath()),
         },
