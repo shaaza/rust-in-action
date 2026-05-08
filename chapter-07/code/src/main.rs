@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-
-mod store;
-
-use store::{KVStore, Store};
+use libactionkv::{KVStore, Store};
 
 #[derive(Debug, Parser)]
 #[command(name = "actionkv")]
