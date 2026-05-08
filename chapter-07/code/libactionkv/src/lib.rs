@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -20,15 +22,24 @@ pub enum StoreError {
 
 pub struct KVStore {
     filepath: PathBuf,
+    _file: File,
     data: HashMap<String, String>,
 }
 
 impl KVStore {
-    pub fn open(filepath: PathBuf) -> Self {
-        Self {
+    pub fn open(filepath: PathBuf) -> io::Result<Self> {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(&filepath)?;
+
+        Ok(Self {
             filepath,
+            _file: file,
             data: HashMap::new(),
-        }
+        })
     }
 
     pub fn filepath(&self) -> &Path {
