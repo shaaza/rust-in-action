@@ -2,6 +2,10 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+mod store;
+
+use store::{KVStore, Store};
+
 #[derive(Debug, Parser)]
 #[command(name = "actionkv")]
 struct Cli {
@@ -13,7 +17,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    Get,
+    Get { key: String },
     Insert { key: String, value: String },
     Update { key: String, value: String },
     Delete { key: String },
@@ -21,17 +25,20 @@ enum Command {
 
 fn main() {
     let cli = Cli::parse();
+    let mut store = KVStore::open(cli.filepath);
 
     match &cli.command {
-        Command::Get => println!("{:?}", cli.command),
-        Command::Insert { .. } => {
-            println!("{:?}", cli.command);
+        Command::Get { key } => {
+            store.get(key);
         }
-        Command::Update { .. } => {
-            println!("{:?}", cli.command);
+        Command::Insert { key, value } => {
+            store.insert(key, value);
         }
-        Command::Delete { .. } => {
-            println!("{:?}", cli.command);
+        Command::Update { key, value } => {
+            store.update(key, value);
+        }
+        Command::Delete { key } => {
+            store.delete(key);
         }
     }
 }
