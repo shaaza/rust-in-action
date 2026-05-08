@@ -1,6 +1,8 @@
 mod data_file;
+mod record;
 
 use data_file::DataFile;
+use record::{DecodedRecord, Record};
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -33,14 +35,21 @@ pub enum StoreError {
         message: String,
     },
 
-    #[error("keys and values cannot contain tabs or newlines")]
+    #[error("record is too large to store")]
     InvalidRecord,
 }
 
 pub struct KVStore {
     filepath: PathBuf,
     file: DataFile,
-    index: HashMap<String, u64>,
+    index: HashMap<String, KeydirEntry>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct KeydirEntry {
+    value_offset: u64,
+    value_size: u32,
+    timestamp: u64,
 }
 
 impl KVStore {
@@ -49,17 +58,20 @@ impl KVStore {
 
         let file = DataFile::open(&filepath)?;
 
-        file.scan_lines(|offset, line| {
-            match Record::parse(&line) {
-                Some(Record::Upsert { key, .. }) => {
-                    index.insert(key, offset);
+        let mut offset = 0;
+        let bytes = file.read_all()?;
+
+        while let Some((record, next_offset)) = Record::decode_at(&bytes, offset)? {
+            match record {
+                DecodedRecord::Upsert { key, entry } => {
+                    index.insert(key, entry);
                 }
-                Some(Record::Delete { key }) => {
+                DecodedRecord::Delete { key, .. } => {
                     index.remove(&key);
                 }
-                None => {}
             }
-        })?;
+            offset = next_offset;
+        }
 
         Ok(Self {
             filepath,
@@ -72,72 +84,28 @@ impl KVStore {
         &self.filepath
     }
 
-    fn append(&mut self, record: Record) -> Result<u64, StoreError> {
-        self.file.append(record.to_line()?)
+    fn append(&mut self, record: Record) -> Result<KeydirEntry, StoreError> {
+        let bytes = record.encode()?;
+        let offset = self.file.append(&bytes)?;
+        Ok(record.keydir_entry(offset))
     }
-
-    fn read_at(&mut self, offset: u64) -> Result<Option<Record>, StoreError> {
-        Ok(Record::parse(&self.file.read_at(offset)?))
-    }
-}
-
-enum Record {
-    Upsert { key: String, value: String },
-    Delete { key: String },
-}
-
-impl Record {
-    fn parse(line: &str) -> Option<Self> {
-        let mut parts = line.splitn(3, '\t');
-
-        match (parts.next(), parts.next(), parts.next()) {
-            (Some("set"), Some(key), Some(value)) => Some(Self::Upsert {
-                key: key.to_string(),
-                value: value.to_string(),
-            }),
-            (Some("delete"), Some(key), None) => Some(Self::Delete {
-                key: key.to_string(),
-            }),
-            _ => None,
-        }
-    }
-
-    fn to_line(&self) -> Result<String, StoreError> {
-        match self {
-            Record::Upsert { key, value } => {
-                validate_field(key)?;
-                validate_field(value)?;
-                Ok(format!("set\t{key}\t{value}"))
-            }
-            Record::Delete { key } => {
-                validate_field(key)?;
-                Ok(format!("delete\t{key}"))
-            }
-        }
-    }
-}
-
-fn validate_field(field: &str) -> Result<(), StoreError> {
-    if field.contains(['\t', '\n', '\r']) {
-        return Err(StoreError::InvalidRecord);
-    }
-
-    Ok(())
 }
 
 impl Store for KVStore {
     fn get(&mut self, key: &str) -> Result<Option<String>, StoreError> {
-        let Some(offset) = self.index.get(key).copied() else {
+        let Some(entry) = self.index.get(key).copied() else {
             return Ok(None);
         };
 
-        match self.read_at(offset)? {
-            Some(Record::Upsert {
-                key: record_key,
-                value,
-            }) if record_key == key => Ok(Some(value)),
-            _ => Ok(None),
-        }
+        let bytes = self
+            .file
+            .read_at(entry.value_offset, entry.value_size as usize)?;
+        let value = String::from_utf8(bytes).map_err(|source| StoreError::ReadFailed {
+            filepath: self.filepath.clone(),
+            message: source.to_string(),
+        })?;
+
+        Ok(Some(value))
     }
 
     fn insert(&mut self, key: &str, value: &str) -> Result<(), StoreError> {
@@ -148,12 +116,8 @@ impl Store for KVStore {
             });
         }
 
-        // Record owns strings, so writes clone the caller's key/value once.
-        let offset = self.append(Record::Upsert {
-            key: key.to_string(),
-            value: value.to_string(),
-        })?;
-        self.index.insert(key.to_string(), offset);
+        let entry = self.append(Record::upsert(key, value))?;
+        self.index.insert(key.to_string(), entry);
         Ok(())
     }
 
@@ -165,22 +129,15 @@ impl Store for KVStore {
             });
         }
 
-        // Record owns strings, so writes clone the caller's key/value once.
-        let offset = self.append(Record::Upsert {
-            key: key.to_string(),
-            value: value.to_string(),
-        })?;
-        self.index.insert(key.to_string(), offset);
+        let entry = self.append(Record::upsert(key, value))?;
+        self.index.insert(key.to_string(), entry);
         Ok(())
     }
 
     fn delete(&mut self, key: &str) -> Result<(), StoreError> {
         match self.index.contains_key(key) {
             true => {
-                // Record owns strings, so writes clone the caller's key once.
-                self.append(Record::Delete {
-                    key: key.to_string(),
-                })?;
+                self.append(Record::delete(key))?;
                 self.index.remove(key);
                 Ok(())
             }

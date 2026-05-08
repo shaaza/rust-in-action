@@ -1,5 +1,4 @@
 use libactionkv::{KVStore, Store, StoreError};
-use std::fs;
 use std::path::PathBuf;
 
 fn store_file() -> (tempfile::TempDir, PathBuf) {
@@ -167,21 +166,24 @@ fn open_loads_deleted_key_as_missing() {
 }
 
 #[test]
-fn open_loads_records_from_file_with_crlf_line_endings() {
+fn insert_stores_key_and_value_that_cannot_be_stored_as_one_line() {
     let (_dir, filepath) = store_file();
-    fs::write(&filepath, "set\tfirst\tone\r\nset\tsecond\ttwo\r\n").unwrap();
-
     let mut store = KVStore::open(filepath).unwrap();
 
-    assert_eq!(Ok(Some("one".to_string())), store.get("first"));
-    assert_eq!(Ok(Some("two".to_string())), store.get("second"));
+    assert_eq!(Ok(()), store.insert("my\tkey", "my\nvalue"));
+    assert_eq!(Ok(Some("my\nvalue".to_string())), store.get("my\tkey"));
 }
 
 #[test]
-fn insert_rejects_key_and_value_that_cannot_be_stored_as_one_line() {
+fn open_loads_key_and_value_that_cannot_be_stored_as_one_line() {
     let (_dir, filepath) = store_file();
+
+    {
+        let mut store = KVStore::open(filepath.clone()).unwrap();
+        assert_eq!(Ok(()), store.insert("my\tkey", "my\nvalue"));
+    }
+
     let mut store = KVStore::open(filepath).unwrap();
 
-    assert_eq!(Err(StoreError::InvalidRecord), store.insert("my\tkey", "my-value"));
-    assert_eq!(Err(StoreError::InvalidRecord), store.insert("my-key", "my\nvalue"));
+    assert_eq!(Ok(Some("my\nvalue".to_string())), store.get("my\tkey"));
 }
