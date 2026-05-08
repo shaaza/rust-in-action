@@ -48,6 +48,8 @@ private helpers. This keeps the numbers aligned with the cost callers actually
 pay:
 
 - `KVStore::open` for loading a data file and rebuilding the in-memory keydir.
+- `KVStore::open_with_persisted_index` for loading the keydir from an adjacent
+  `.idx` snapshot when it is current.
 - `Store::get` for indexed lookup followed by record validation and value read.
 - `Store::insert` for appending a new record and updating the in-memory index.
 
@@ -55,6 +57,30 @@ The main decision point is `KVStore::open`. Today it reads the entire data file
 and rebuilds the in-memory index by decoding every record. If that benchmark
 scales poorly enough for expected store sizes, it is evidence that loading a
 persisted index from disk may be worth implementing.
+
+## Persisted Index Options
+
+The implemented option is an adjacent binary snapshot file named by appending
+`.idx` to the data file path, for example `store.db.idx`.
+`KVStore::open_with_persisted_index` loads this file when its recorded data-file
+length still matches the current data file. If it is missing or stale, the store
+falls back to the original full scan and writes a fresh snapshot.
+
+The snapshot stores only the in-memory keydir entries: key, record offset,
+record size, value offset, value size, and timestamp. The data file remains the
+source of truth, and `KVStore::open` is still available as the full-scan
+correctness baseline.
+
+Other viable designs:
+
+- Snapshot on close or explicit checkpoint: faster writes, but a crash can leave
+  the next open doing a full rebuild.
+- Append-only index log: much cheaper per write, but it needs compaction and
+  recovery logic similar to the main data file.
+- Memory-mapped index file: useful for very large indexes, but more platform
+  and lifetime complexity than this chapter-sized store needs.
+- Embedded index records in the data file: keeps one file, but startup still has
+  to find the latest valid index checkpoint before replaying newer data records.
 
 ## Benchmarks
 
@@ -107,79 +133,19 @@ for report generation.
 
 | Benchmark | Time | Throughput |
 | --- | ---: | ---: |
-| `open_rebuilds_index/100` | `[51.762 us 52.552 us 53.855 us]` | `[1.8569 Melem/s 1.9029 Melem/s 1.9319 Melem/s]` |
-| `open_rebuilds_index/1000` | `[248.79 us 252.54 us 259.90 us]` | `[3.8476 Melem/s 3.9597 Melem/s 4.0194 Melem/s]` |
-| `open_rebuilds_index/10000` | `[2.2092 ms 2.2742 ms 2.3901 ms]` | `[4.1839 Melem/s 4.3972 Melem/s 4.5265 Melem/s]` |
-| `get_existing_key` | `[1.5439 us 1.5845 us 1.6418 us]` | n/a |
-| `insert_new_key` | `[4.2518 us 4.4938 us 4.8077 us]` | n/a |
+| `open_rebuilds_index/100` | `[51.344 us 52.749 us 55.108 us]` | `[1.8146 Melem/s 1.8958 Melem/s 1.9477 Melem/s]` |
+| `open_persisted_index/100` | `[49.231 us 50.583 us 52.678 us]` | `[1.8983 Melem/s 1.9770 Melem/s 2.0312 Melem/s]` |
+| `open_rebuilds_index/1000` | `[247.11 us 254.47 us 263.40 us]` | `[3.7966 Melem/s 3.9297 Melem/s 4.0468 Melem/s]` |
+| `open_persisted_index/1000` | `[176.02 us 183.52 us 193.55 us]` | `[5.1666 Melem/s 5.4490 Melem/s 5.6812 Melem/s]` |
+| `open_rebuilds_index/10000` | `[2.2316 ms 2.3327 ms 2.4265 ms]` | `[4.1212 Melem/s 4.2869 Melem/s 4.4812 Melem/s]` |
+| `open_persisted_index/10000` | `[1.4557 ms 1.5114 ms 1.5931 ms]` | `[6.2770 Melem/s 6.6164 Melem/s 6.8695 Melem/s]` |
+| `get_existing_key` | `[1.5607 us 1.6122 us 1.6835 us]` | n/a |
+| `insert_new_key` | `[4.4311 us 4.7814 us 5.1936 us]` | n/a |
+| `insert_new_key_with_persisted_index` | `[944.08 us 1.0149 ms 1.0669 ms]` | n/a |
 
-Raw output:
-
-```text
-Finished `bench` profile [optimized] target(s) in 0.23s
-Running unittests src/lib.rs (target/release/deps/libactionkv-6ec537ccb12f354c)
-
-running 11 tests
-test record::tests::decode_reads_delete_record_into_tombstone ... ignored
-test record::tests::decode_reads_record_at_offset_and_returns_next_offset ... ignored
-test record::tests::decode_reads_upsert_record_into_keydir_entry ... ignored
-test record::tests::decode_rejects_checksum_mismatch ... ignored
-test record::tests::decode_rejects_delete_record_with_value ... ignored
-test record::tests::decode_rejects_incomplete_body ... ignored
-test record::tests::decode_rejects_incomplete_header ... ignored
-test record::tests::decode_rejects_unknown_record_kind ... ignored
-test record::tests::decode_returns_none_at_end_of_file ... ignored
-test record::tests::encode_writes_delete_record_as_kind_timestamp_key_size_zero_value_size_key ... ignored
-test record::tests::encode_writes_upsert_record_as_kind_timestamp_sizes_key_value ... ignored
-
-test result: ok. 0 passed; 0 failed; 11 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
-Running benches/store.rs (target/release/deps/store-97e9563a30bb1883)
-Gnuplot not found, using plotters backend
-Benchmarking open_rebuilds_index/100
-Benchmarking open_rebuilds_index/100: Warming up for 3.0000 s
-Benchmarking open_rebuilds_index/100: Collecting 20 samples in estimated 5.0075 s (96k iterations)
-Benchmarking open_rebuilds_index/100: Analyzing
-open_rebuilds_index/100 time:   [51.762 us 52.552 us 53.855 us]
-                        thrpt:  [1.8569 Melem/s 1.9029 Melem/s 1.9319 Melem/s]
-Found 3 outliers among 20 measurements (15.00%)
-  1 (5.00%) high mild
-  2 (10.00%) high severe
-Benchmarking open_rebuilds_index/1000
-Benchmarking open_rebuilds_index/1000: Warming up for 3.0000 s
-Benchmarking open_rebuilds_index/1000: Collecting 20 samples in estimated 5.0157 s (20k iterations)
-Benchmarking open_rebuilds_index/1000: Analyzing
-open_rebuilds_index/1000
-                        time:   [248.79 us 252.54 us 259.90 us]
-                        thrpt:  [3.8476 Melem/s 3.9597 Melem/s 4.0194 Melem/s]
-Found 2 outliers among 20 measurements (10.00%)
-  1 (5.00%) high mild
-  1 (5.00%) high severe
-Benchmarking open_rebuilds_index/10000
-Benchmarking open_rebuilds_index/10000: Warming up for 3.0000 s
-Benchmarking open_rebuilds_index/10000: Collecting 20 samples in estimated 5.3318 s (2310 iterations)
-Benchmarking open_rebuilds_index/10000: Analyzing
-open_rebuilds_index/10000
-                        time:   [2.2092 ms 2.2742 ms 2.3901 ms]
-                        thrpt:  [4.1839 Melem/s 4.3972 Melem/s 4.5265 Melem/s]
-Found 1 outliers among 20 measurements (5.00%)
-  1 (5.00%) high severe
-
-Benchmarking get_existing_key
-Benchmarking get_existing_key: Warming up for 3.0000 s
-Benchmarking get_existing_key: Collecting 20 samples in estimated 5.0000 s (3.1M iterations)
-Benchmarking get_existing_key: Analyzing
-get_existing_key        time:   [1.5439 us 1.5845 us 1.6418 us]
-Found 2 outliers among 20 measurements (10.00%)
-  2 (10.00%) high severe
-
-Benchmarking insert_new_key
-Benchmarking insert_new_key: Warming up for 3.0000 s
-Benchmarking insert_new_key: Collecting 20 samples in estimated 5.0006 s (1.1M iterations)
-Benchmarking insert_new_key: Analyzing
-insert_new_key          time:   [4.2518 us 4.4938 us 4.8077 us]
-Found 7 outliers among 20 measurements (35.00%)
-  4 (20.00%) low mild
-  1 (5.00%) high mild
-  2 (10.00%) high severe
-```
+The persisted snapshot improved median open time by about 4% at 100 records,
+28% at 1,000 records, and 35% at 10,000 records in this run. The eager snapshot
+write strategy is costly for inserts because each mutation rewrites the whole
+index file; median insert time rose from 4.7814 us to 1.0149 ms. For a
+write-heavy store, prefer an append-only index log or checkpoint-on-close
+design.

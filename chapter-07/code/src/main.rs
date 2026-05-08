@@ -22,7 +22,7 @@ enum Command {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Cli { filepath, command } = Cli::parse();
-    let mut store = KVStore::open(filepath)?;
+    let mut store = KVStore::open_with_persisted_index(filepath)?;
 
     match &command {
         Command::Get { key } => match store.get(key)? {

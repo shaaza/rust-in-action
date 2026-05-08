@@ -137,6 +137,40 @@ fn open_loads_inserted_key_from_file() {
 }
 
 #[test]
+fn open_with_persisted_index_loads_inserted_key_from_index_file() {
+    let (_dir, filepath) = store_file();
+
+    {
+        let mut store = KVStore::open_with_persisted_index(filepath.clone()).unwrap();
+        assert_eq!(Ok(()), store.insert("my-key", "my-value"));
+    }
+
+    let mut store = KVStore::open_with_persisted_index(filepath).unwrap();
+
+    assert_eq!(Ok(Some("my-value".to_string())), store.get("my-key"));
+}
+
+#[test]
+fn open_with_persisted_index_rebuilds_stale_index_file() {
+    let (_dir, filepath) = store_file();
+
+    {
+        let mut store = KVStore::open_with_persisted_index(filepath.clone()).unwrap();
+        assert_eq!(Ok(()), store.insert("my-key", "my-value"));
+    }
+
+    {
+        let mut store = KVStore::open(filepath.clone()).unwrap();
+        assert_eq!(Ok(()), store.insert("other-key", "other-value"));
+    }
+
+    let mut store = KVStore::open_with_persisted_index(filepath).unwrap();
+
+    assert_eq!(Ok(Some("my-value".to_string())), store.get("my-key"));
+    assert_eq!(Ok(Some("other-value".to_string())), store.get("other-key"));
+}
+
+#[test]
 fn open_loads_latest_update_from_file() {
     let (_dir, filepath) = store_file();
 

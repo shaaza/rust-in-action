@@ -1,4 +1,5 @@
 mod data_file;
+mod index_file;
 mod record;
 
 use data_file::DataFile;
@@ -43,6 +44,7 @@ pub struct KVStore {
     filepath: PathBuf,
     file: DataFile,
     index: HashMap<String, KeydirEntry>,
+    index_filepath: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,9 +58,40 @@ pub(crate) struct KeydirEntry {
 
 impl KVStore {
     pub fn open(filepath: PathBuf) -> io::Result<Self> {
-        let mut index = HashMap::new();
-
         let file = DataFile::open(&filepath)?;
+        let index = Self::rebuild_index(&file)?;
+
+        Ok(Self {
+            filepath,
+            file,
+            index,
+            index_filepath: None,
+        })
+    }
+
+    pub fn open_with_persisted_index(filepath: PathBuf) -> io::Result<Self> {
+        let file = DataFile::open(&filepath)?;
+        let index_filepath = index_file::path_for(&filepath);
+
+        let index = match index_file::load(&filepath, &index_filepath)? {
+            Some(index) => index,
+            None => {
+                let index = Self::rebuild_index(&file)?;
+                index_file::save(&filepath, &index_filepath, &index)?;
+                index
+            }
+        };
+
+        Ok(Self {
+            filepath,
+            file,
+            index,
+            index_filepath: Some(index_filepath),
+        })
+    }
+
+    fn rebuild_index(file: &DataFile) -> io::Result<HashMap<String, KeydirEntry>> {
+        let mut index = HashMap::new();
 
         let mut offset = 0;
         let bytes = file.read_all()?;
@@ -75,11 +108,7 @@ impl KVStore {
             offset = next_offset;
         }
 
-        Ok(Self {
-            filepath,
-            file,
-            index,
-        })
+        Ok(index)
     }
 
     pub fn filepath(&self) -> &Path {
@@ -90,6 +119,19 @@ impl KVStore {
         let bytes = record.encode()?;
         let offset = self.file.append(&bytes)?;
         Ok(record.keydir_entry(offset))
+    }
+
+    fn persist_index(&self) -> Result<(), StoreError> {
+        let Some(index_filepath) = &self.index_filepath else {
+            return Ok(());
+        };
+
+        index_file::save(&self.filepath, index_filepath, &self.index).map_err(|source| {
+            StoreError::WriteFailed {
+                filepath: index_filepath.clone(),
+                message: source.to_string(),
+            }
+        })
     }
 }
 
@@ -130,6 +172,7 @@ impl Store for KVStore {
 
         let entry = self.append(Record::upsert(key, value))?;
         self.index.insert(key.to_string(), entry);
+        self.persist_index()?;
         Ok(())
     }
 
@@ -143,6 +186,7 @@ impl Store for KVStore {
 
         let entry = self.append(Record::upsert(key, value))?;
         self.index.insert(key.to_string(), entry);
+        self.persist_index()?;
         Ok(())
     }
 
@@ -151,6 +195,7 @@ impl Store for KVStore {
             true => {
                 self.append(Record::delete(key))?;
                 self.index.remove(key);
+                self.persist_index()?;
                 Ok(())
             }
             false => Err(StoreError::KeyNotFound {

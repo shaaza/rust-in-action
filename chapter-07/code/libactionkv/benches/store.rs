@@ -32,8 +32,35 @@ fn build_store(record_count: usize) -> StoreFixture {
     }
 }
 
+fn build_store_with_persisted_index(record_count: usize) -> StoreFixture {
+    let dir = tempfile::tempdir().expect("create benchmark tempdir");
+    let filepath = dir.path().join("store.db");
+
+    {
+        let mut store =
+            KVStore::open_with_persisted_index(filepath.clone()).expect("open benchmark store");
+        for n in 0..record_count {
+            let key = key(n);
+            let value = value(n);
+            store.insert(&key, &value).expect("insert benchmark record");
+        }
+    }
+
+    StoreFixture {
+        _dir: dir,
+        filepath,
+        record_count,
+    }
+}
+
 fn open_store(filepath: &Path) {
     let store = KVStore::open(filepath.to_path_buf()).expect("open benchmark store");
+    black_box(store);
+}
+
+fn open_store_with_persisted_index(filepath: &Path) {
+    let store =
+        KVStore::open_with_persisted_index(filepath.to_path_buf()).expect("open benchmark store");
     black_box(store);
 }
 
@@ -56,6 +83,27 @@ fn bench_open_rebuilds_index(c: &mut Criterion) {
             &fixture.filepath,
             |b, filepath| {
                 b.iter(|| open_store(filepath));
+            },
+        );
+    }
+    group.finish();
+}
+
+fn bench_open_persisted_index(c: &mut Criterion) {
+    let fixtures: Vec<_> = STORE_SIZES
+        .iter()
+        .copied()
+        .map(build_store_with_persisted_index)
+        .collect();
+
+    let mut group = c.benchmark_group("open_persisted_index");
+    for fixture in &fixtures {
+        group.throughput(Throughput::Elements(fixture.record_count as u64));
+        group.bench_with_input(
+            BenchmarkId::from_parameter(fixture.record_count),
+            &fixture.filepath,
+            |b, filepath| {
+                b.iter(|| open_store_with_persisted_index(filepath));
             },
         );
     }
@@ -97,9 +145,29 @@ fn bench_insert_new_key(c: &mut Criterion) {
     });
 }
 
+fn bench_insert_new_key_with_persisted_index(c: &mut Criterion) {
+    let dir = tempfile::tempdir().expect("create benchmark tempdir");
+    let filepath = dir.path().join("store.db");
+    let mut store = KVStore::open_with_persisted_index(filepath).expect("open benchmark store");
+    let mut next_key = 0;
+
+    c.bench_function("insert_new_key_with_persisted_index", |b| {
+        b.iter(|| {
+            let key = key(next_key);
+            let value = value(next_key);
+            next_key += 1;
+            black_box(
+                store
+                    .insert(black_box(&key), black_box(&value))
+                    .expect("insert benchmark record"),
+            );
+        });
+    });
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(20);
-    targets = bench_open_rebuilds_index, bench_get_existing_key, bench_insert_new_key
+    targets = bench_open_rebuilds_index, bench_open_persisted_index, bench_get_existing_key, bench_insert_new_key, bench_insert_new_key_with_persisted_index
 );
 criterion_main!(benches);
