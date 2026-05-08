@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use libactionkv::{KVStore, Store};
+use libactionkv::{KVStore, Store, StoreError};
 
 #[derive(Debug, Parser)]
 #[command(name = "actionkv")]
@@ -20,22 +20,28 @@ enum Command {
     Delete { key: String },
 }
 
-fn main() {
-    let cli = Cli::parse();
-    let mut store = KVStore::open(cli.filepath);
+fn main() -> Result<(), StoreError> {
+    let Cli { filepath, command } = Cli::parse();
+    let mut store = KVStore::open(filepath);
 
-    match &cli.command {
-        Command::Get { key } => {
-            store.get(key);
-        }
+    match &command {
+        Command::Get { key } => match store.get(key) {
+            Some(value) => println!("{key}={value}"),
+            None => println!("{key} not found in {:?}", store.filepath()),
+        },
         Command::Insert { key, value } => {
-            store.insert(key, value);
+            store.insert(key, value)?;
+            println!("insert {key}={value} into {:?}", store.filepath());
         }
         Command::Update { key, value } => {
-            store.update(key, value);
+            store.update(key, value)?;
+            println!("update {key}={value} in {:?}", store.filepath());
         }
         Command::Delete { key } => {
-            store.delete(key);
+            store.delete(key)?;
+            println!("delete {key} from {:?}", store.filepath());
         }
     }
+
+    Ok(())
 }

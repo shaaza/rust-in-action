@@ -34,7 +34,7 @@ fn get_accepts_key() {
     actionkv("actionkv filepath get my-key", &file)
         .assert()
         .success()
-        .stdout(predicate::str::contains(r#"get my-key from"#));
+        .stdout(predicate::str::contains(r#"my-key not found in"#));
 }
 
 /// Rejects get without a key.
@@ -74,26 +74,26 @@ fn insert_requires_value() {
 
 // update
 
-/// Runs update with a key and value.
+/// Rejects update when the key does not exist.
 #[test]
-fn update_accepts_key_and_value() {
+fn update_rejects_missing_key() {
     let file = NamedTempFile::new().unwrap();
 
     actionkv("actionkv filepath update my-key my-value", &file)
         .assert()
-        .success()
-        .stdout(predicate::str::contains("update my-key=my-value in"));
+        .failure()
+        .stderr(predicate::str::contains("my-key"));
 }
 
 // delete
 
-/// Runs delete with a key.
+/// Rejects delete when the key does not exist.
 #[test]
-fn delete_accepts_key() {
+fn delete_rejects_missing_key() {
     let file = NamedTempFile::new().unwrap();
 
     actionkv("actionkv filepath delete my-key", &file)
         .assert()
-        .success()
-        .stdout(predicate::str::contains(r#"delete my-key from"#));
+        .failure()
+        .stderr(predicate::str::contains("my-key"));
 }
