@@ -47,6 +47,8 @@ pub struct KVStore {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct KeydirEntry {
+    record_offset: u64,
+    record_size: u64,
     value_offset: u64,
     value_size: u32,
     timestamp: u64,
@@ -99,11 +101,21 @@ impl Store for KVStore {
 
         let bytes = self
             .file
-            .read_at(entry.value_offset, entry.value_size as usize)?;
-        let value = String::from_utf8(bytes).map_err(|source| StoreError::ReadFailed {
+            .read_at(entry.record_offset, entry.record_size as usize)?;
+        Record::decode_at(&bytes, 0).map_err(|source| StoreError::ReadFailed {
             filepath: self.filepath.clone(),
             message: source.to_string(),
         })?;
+
+        let value_start = (entry.value_offset - entry.record_offset) as usize;
+        let value_end = value_start + entry.value_size as usize;
+        let value =
+            String::from_utf8(bytes[value_start..value_end].to_vec()).map_err(|source| {
+                StoreError::ReadFailed {
+                    filepath: self.filepath.clone(),
+                    message: source.to_string(),
+                }
+            })?;
 
         Ok(Some(value))
     }

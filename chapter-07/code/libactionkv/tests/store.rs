@@ -1,4 +1,5 @@
 use libactionkv::{KVStore, Store, StoreError};
+use std::fs;
 use std::path::PathBuf;
 
 fn store_file() -> (tempfile::TempDir, PathBuf) {
@@ -186,4 +187,47 @@ fn open_loads_key_and_value_that_cannot_be_stored_as_one_line() {
     let mut store = KVStore::open(filepath).unwrap();
 
     assert_eq!(Ok(Some("my\nvalue".to_string())), store.get("my\tkey"));
+}
+
+#[test]
+fn open_rejects_record_with_checksum_mismatch() {
+    let (_dir, filepath) = store_file();
+
+    {
+        let mut store = KVStore::open(filepath.clone()).unwrap();
+        assert_eq!(Ok(()), store.insert("my-key", "my-value"));
+    }
+
+    let mut bytes = fs::read(&filepath).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 1;
+    fs::write(&filepath, bytes).unwrap();
+
+    let error = match KVStore::open(filepath) {
+        Ok(_) => panic!("expected checksum mismatch"),
+        Err(error) => error,
+    };
+
+    assert_eq!(std::io::ErrorKind::InvalidData, error.kind());
+    assert_eq!("record checksum mismatch", error.to_string());
+}
+
+#[test]
+fn get_rejects_record_with_checksum_mismatch() {
+    let (_dir, filepath) = store_file();
+    let mut store = KVStore::open(filepath.clone()).unwrap();
+    assert_eq!(Ok(()), store.insert("my-key", "my-value"));
+
+    let mut bytes = fs::read(&filepath).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 1;
+    fs::write(&filepath, bytes).unwrap();
+
+    assert_eq!(
+        Err(StoreError::ReadFailed {
+            filepath,
+            message: "record checksum mismatch".to_string(),
+        }),
+        store.get("my-key")
+    );
 }

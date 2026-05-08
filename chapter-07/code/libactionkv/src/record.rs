@@ -15,7 +15,7 @@ pub(crate) enum Record {
 }
 
 impl Record {
-    const HEADER_SIZE: usize = 17;
+    const HEADER_SIZE: usize = 18;
     const KIND_UPSERT: u8 = 1;
     const KIND_DELETE: u8 = 2;
 
@@ -40,13 +40,17 @@ impl Record {
         let key_size = u32::try_from(key.len()).map_err(|_| StoreError::InvalidRecord)?;
         let value_size = u32::try_from(value.len()).map_err(|_| StoreError::InvalidRecord)?;
 
+        let mut record_data = Vec::with_capacity(Self::HEADER_SIZE - 1 + key.len() + value.len());
+        record_data.push(self.kind());
+        record_data.extend_from_slice(&self.timestamp().to_le_bytes());
+        record_data.extend_from_slice(&key_size.to_le_bytes());
+        record_data.extend_from_slice(&value_size.to_le_bytes());
+        record_data.extend_from_slice(key);
+        record_data.extend_from_slice(value);
+
         let mut bytes = Vec::with_capacity(Self::HEADER_SIZE + key.len() + value.len());
-        bytes.push(self.kind());
-        bytes.extend_from_slice(&self.timestamp().to_le_bytes());
-        bytes.extend_from_slice(&key_size.to_le_bytes());
-        bytes.extend_from_slice(&value_size.to_le_bytes());
-        bytes.extend_from_slice(key);
-        bytes.extend_from_slice(value);
+        bytes.push(even_parity(&record_data));
+        bytes.extend_from_slice(&record_data);
 
         Ok(bytes)
     }
@@ -64,10 +68,11 @@ impl Record {
         }
 
         let header = &bytes[offset..offset + Self::HEADER_SIZE];
-        let kind = header[0];
-        let timestamp = u64::from_le_bytes(header[1..9].try_into().unwrap());
-        let key_size = u32::from_le_bytes(header[9..13].try_into().unwrap()) as usize;
-        let value_size = u32::from_le_bytes(header[13..17].try_into().unwrap()) as usize;
+        let parity = header[0];
+        let kind = header[1];
+        let timestamp = u64::from_le_bytes(header[2..10].try_into().unwrap());
+        let key_size = u32::from_le_bytes(header[10..14].try_into().unwrap()) as usize;
+        let value_size = u32::from_le_bytes(header[14..18].try_into().unwrap()) as usize;
         let body_offset = offset + Self::HEADER_SIZE;
         let value_offset = body_offset + key_size;
         let next_offset = value_offset
@@ -78,6 +83,10 @@ impl Record {
             return Err(invalid_data("incomplete record body"));
         }
 
+        if parity > 1 || parity != even_parity(&bytes[offset + 1..next_offset]) {
+            return Err(invalid_data("record checksum mismatch"));
+        }
+
         let key = String::from_utf8(bytes[body_offset..value_offset].to_vec())
             .map_err(|_| invalid_data("key is not valid utf-8"))?;
 
@@ -85,6 +94,8 @@ impl Record {
             Self::KIND_UPSERT => DecodedRecord::Upsert {
                 key,
                 entry: KeydirEntry {
+                    record_offset: offset as u64,
+                    record_size: (next_offset - offset) as u64,
                     value_offset: value_offset as u64,
                     value_size: value_size as u32,
                     timestamp,
@@ -103,6 +114,8 @@ impl Record {
         let value_size = self.value().map_or(0, str::len) as u32;
 
         KeydirEntry {
+            record_offset,
+            record_size: Self::HEADER_SIZE as u64 + key_size + value_size as u64,
             value_offset: record_offset + Self::HEADER_SIZE as u64 + key_size,
             value_size,
             timestamp: self.timestamp(),
@@ -147,6 +160,12 @@ fn timestamp() -> u64 {
         .map_or(0, |duration| duration.as_secs())
 }
 
+fn even_parity(bytes: &[u8]) -> u8 {
+    bytes
+        .iter()
+        .fold(0, |parity, byte| parity ^ (byte.count_ones() as u8 & 1))
+}
+
 fn invalid_data(message: &'static str) -> io::Error {
     io::Error::new(ErrorKind::InvalidData, message)
 }
@@ -175,13 +194,17 @@ mod tests {
             other => panic!("unknown record kind {other}"),
         };
 
+        let mut data = Vec::new();
+        data.push(kind);
+        data.extend_from_slice(&timestamp.to_le_bytes());
+        data.extend_from_slice(&(key.len() as u32).to_le_bytes());
+        data.extend_from_slice(&(value.len() as u32).to_le_bytes());
+        data.extend_from_slice(key);
+        data.extend_from_slice(value);
+
         let mut bytes = Vec::new();
-        bytes.push(kind);
-        bytes.extend_from_slice(&timestamp.to_le_bytes());
-        bytes.extend_from_slice(&(key.len() as u32).to_le_bytes());
-        bytes.extend_from_slice(&(value.len() as u32).to_le_bytes());
-        bytes.extend_from_slice(key);
-        bytes.extend_from_slice(value);
+        bytes.push(even_parity(&data));
+        bytes.extend_from_slice(&data);
         bytes
     }
 
@@ -238,8 +261,8 @@ mod tests {
 
         assert_eq!(
             Some((
-                "upsert key=my-key value_offset=23 value_size=8 ts=7".to_string(),
-                31,
+                "upsert key=my-key value_offset=24 value_size=8 ts=7".to_string(),
+                32,
             )),
             decoded_summary(&bytes, 0).unwrap()
         );
@@ -250,7 +273,7 @@ mod tests {
         let bytes = encoded_record("delete ts=7 key=my-key");
 
         assert_eq!(
-            Some(("delete key=my-key".to_string(), 23)),
+            Some(("delete key=my-key".to_string(), 24)),
             decoded_summary(&bytes, 0).unwrap()
         );
     }
@@ -265,8 +288,8 @@ mod tests {
 
         assert_eq!(
             Some((
-                "upsert key=new-key value_offset=48 value_size=9 ts=2".to_string(),
-                57,
+                "upsert key=new-key value_offset=50 value_size=9 ts=2".to_string(),
+                59,
             )),
             decoded_summary(&bytes, second_offset).unwrap()
         );
@@ -281,7 +304,7 @@ mod tests {
 
     #[test]
     fn decode_rejects_incomplete_header() {
-        let bytes = vec![Record::KIND_UPSERT];
+        let bytes = vec![0, Record::KIND_UPSERT];
 
         let error = decoded_summary(&bytes, 0).unwrap_err();
 
@@ -301,9 +324,22 @@ mod tests {
     }
 
     #[test]
+    fn decode_rejects_checksum_mismatch() {
+        let mut bytes = encoded_record("upsert ts=7 key=my-key value=my-value");
+        let last = bytes.len() - 1;
+        bytes[last] ^= 1;
+
+        let error = decoded_summary(&bytes, 0).unwrap_err();
+
+        assert_eq!(ErrorKind::InvalidData, error.kind());
+        assert_eq!("record checksum mismatch", error.to_string());
+    }
+
+    #[test]
     fn decode_rejects_unknown_record_kind() {
         let mut bytes = encoded_record("upsert ts=7 key=my-key value=my-value");
-        bytes[0] = 99;
+        bytes[1] = 99;
+        bytes[0] = even_parity(&bytes[1..]);
 
         let error = decoded_summary(&bytes, 0).unwrap_err();
 
