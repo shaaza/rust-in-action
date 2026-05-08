@@ -7,4 +7,9 @@ edition = "2024"
 thiserror = "2"
 
 [dev-dependencies]
+criterion = "0.5"
 tempfile = "3"
+
+[[bench]]
+name = "store"
+harness = false
